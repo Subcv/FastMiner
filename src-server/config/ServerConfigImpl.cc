@@ -17,12 +17,19 @@ namespace fm {
 namespace server {
 
 ll::Expected<> ServerConfigImpl::load(const std::filesystem::path& baseDir) {
-    auto path = baseDir / "Config.json";
+    auto path     = baseDir / "Config.json";
+    bool needSave = false;
     if (!std::filesystem::exists(path) || !ll::config::loadConfig(model, path)) {
-        save(baseDir);
+        needSave = true;
     }
+
+    // 先读取玩家配置，避免配置版本升级触发 save() 时用空数据覆盖玩家设置
     loadPlayerConfig();
     loadPlayerBlocksConfig();
+
+    if (needSave) {
+        save(baseDir);
+    }
     return {};
 }
 

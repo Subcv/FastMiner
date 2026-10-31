@@ -20,6 +20,9 @@ public:
     bool destroy() override;
 
     econbridge::IEconomy& getEconomy() const;
+
+    /** 玩家自定义方块专用经济（独立于全局 economy.enabled） */
+    econbridge::IEconomy& getPlayerBlockEconomy() const;
 };
 
 } // namespace server

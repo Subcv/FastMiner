@@ -29,7 +29,7 @@ struct BlockConfig {
 using Blocks = std::unordered_map<std::string, BlockConfig>;
 
 struct ServerConfigModel {
-    static constexpr int SchemaVersion = 8;
+    static constexpr int SchemaVersion = 9;
 
     int version = SchemaVersion;
 
@@ -44,6 +44,16 @@ struct ServerConfigModel {
         EconomyKit  kit            = EconomyKit::LegacyMoney;
         std::string scoreboardName = "Scoreboard";
     } economy;
+
+    /**
+     * @brief 玩家自己添加的连锁方块的经济扣费。
+     * @note 独立于 economy.enabled：即使全局经济关闭，玩家自定义方块也可以单独收费。
+     */
+    struct PlayerBlockEconomyConfig {
+        bool enabled{true};
+        int  cost{1};          // 普通工具每连锁 1 格扣多少
+        int  silkTouchCost{3}; // 精准采集工具每连锁 1 格扣多少
+    } playerBlockEconomy;
 
     Blocks blocks;
 };

@@ -242,14 +242,26 @@ void sendPlayerBlocksGUI(Player& player) {
     auto& impl   = StaticGlobalConfigHost::getInstance().as<ServerConfigImpl>();
     auto  blocks = impl.listPlayerBlocks(player.getUuid());
 
+    auto const& ecoCfg = ServerConfigImpl::model.playerBlockEconomy;
+    std::string ecoText = ecoCfg.enabled
+                            ? fmt::format(
+                                  "§7经济：每格 §e{}§7 点，精准采集工具每格 §e{}§7 点",
+                                  ecoCfg.cost,
+                                  ecoCfg.silkTouchCost
+                              )
+                            : "§7经济：§a不扣费";
+
     SimpleForm f{PLUGIN_NAME};
     f.setContent(fmt::format(
         "§7我的连锁方块：§e{} §7种\n"
         "§7单次最多额外连锁 §e{} §7格（不含手动挖的第 1 个）\n"
-        "§7时运/精准采集附魔正常生效\n"
-        "§7对准方块输入 §e/fm add §7添加，§e/fm remove §7移除",
+        "§7点击下方已添加的方块即可将其移除\n"
+        "{}\n"
+        "§7对准方块输入 §e/fm add §7添加\n"
+        "§7时运/精准采集附魔正常生效",
         blocks.size(),
-        ServerConfigImpl::PlayerBlockChainLimit
+        ServerConfigImpl::PlayerBlockChainLimit,
+        ecoText
     ));
 
     f.appendButton("添加看向的方块", "textures/ui/color_plus", "path", [](Player& pl) {
@@ -259,8 +271,9 @@ void sendPlayerBlocksGUI(Player& player) {
     f.appendDivider();
 
     for (auto const& [type, name] : blocks) {
+        const std::string& display = name.empty() ? type : name;
         f.appendButton(
-            fmt::format("{}\n§c点击移除", name),
+            fmt::format("§0{}", display),
             "textures/ui/icon_trash",
             "path",
             [type](Player& pl) {

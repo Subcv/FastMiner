@@ -13,21 +13,26 @@ namespace server {
 
 struct ServerPlatformService::Impl {
     std::unique_ptr<econbridge::IEconomy> mEconomy{nullptr};
+    std::unique_ptr<econbridge::IEconomy> mPlayerBlockEconomy{nullptr};
 
-    void initEconomy() {
-        if (!ServerConfigImpl::model.economy.enabled) {
-            mEconomy = std::make_unique<econbridge::detail::NullEconomy>();
-            return;
+    static std::unique_ptr<econbridge::IEconomy> createEconomy(bool enabled) {
+        if (!enabled) {
+            return std::make_unique<econbridge::detail::NullEconomy>();
         }
         switch (ServerConfigImpl::model.economy.kit) {
         case ConfigModel::EconomyConfig::EconomyKit::LegacyMoney:
-            mEconomy = std::make_unique<econbridge::detail::LegacyMoneyEconomy>();
-            break;
+            return std::make_unique<econbridge::detail::LegacyMoneyEconomy>();
         case ConfigModel::EconomyConfig::EconomyKit::ScoreBoard:
-            mEconomy =
-                std::make_unique<econbridge::detail::ScoreboardEconomy>(ServerConfigImpl::model.economy.scoreboardName);
-            break;
+            return std::make_unique<econbridge::detail::ScoreboardEconomy>(
+                ServerConfigImpl::model.economy.scoreboardName
+            );
         }
+        return std::make_unique<econbridge::detail::NullEconomy>();
+    }
+
+    void initEconomy() {
+        mEconomy            = createEconomy(ServerConfigImpl::model.economy.enabled);
+        mPlayerBlockEconomy = createEconomy(ServerConfigImpl::model.playerBlockEconomy.enabled);
     }
 };
 
@@ -44,10 +49,15 @@ bool ServerPlatformService::init() {
 
 bool ServerPlatformService::destroy() {
     impl->mEconomy.reset();
+    impl->mPlayerBlockEconomy.reset();
     return true;
 }
 
 econbridge::IEconomy& ServerPlatformService::getEconomy() const { return *impl->mEconomy; }
+
+econbridge::IEconomy& ServerPlatformService::getPlayerBlockEconomy() const {
+    return *impl->mPlayerBlockEconomy;
+}
 
 
 } // namespace server

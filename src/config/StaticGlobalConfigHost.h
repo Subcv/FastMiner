@@ -24,6 +24,9 @@ struct RuntimeSingleBlockConfig {
     std::optional<int>           limit{std::nullopt};
     absl::flat_hash_set<BlockID> similarBlock{};
 
+    /** 是否为玩家自己添加的方块（用于单独的经济扣费/上限逻辑） */
+    bool isPlayerBlock{false};
+
     explicit RuntimeSingleBlockConfig(SingleBlockConfig config) : rawConfig(std::move(config)) {}
 };
 using RuntimeSingleBlockConfigPtr = std::shared_ptr<RuntimeSingleBlockConfig>;

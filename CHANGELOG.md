@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.1] - 2026-11-01
+
+- ✨ 玩家自定义方块经济：默认每格 1 点，精准采集工具每格 3 点（`playerBlockEconomy` 可配置，独立于全局经济开关）
+- ✨ 管理界面按钮改为只显示方块中文名，点击方块名即可移除
+- 🐛 修复配置版本升级时可能用空数据覆盖 `PlayerSetting.json` 的问题
+
 ## [0.21.0] - 2026-10-31
 
 - ✨ (服务端侧) 新增玩家自定义连锁方块：普通玩家可用 `/fm add` 把看向（或手持）的方块加入自己的列表，`/fm remove` 移除，`/fm blocks` 打开管理界面
