@@ -352,9 +352,30 @@ void ServerConfigImpl::loadPlayerBlocksConfig() {
         return;
     }
 
+    // 手动解析，避免反射反序列化把中文名字段丢掉
     try {
         auto json = nlohmann::json::parse(*content);
-        json_utils::json2struct(playerBlocks_, json);
+        if (!json.is_object()) {
+            return;
+        }
+        for (auto const& [uuidKey, blocks] : json.items()) {
+            if (!blocks.is_object()) {
+                continue;
+            }
+            mce::UUID uuid{};
+            try {
+                uuid = mce::UUID::fromString(uuidKey);
+            } catch (...) {
+                continue;
+            }
+            if (!uuid) {
+                continue;
+            }
+            auto& list = playerBlocks_[uuid];
+            for (auto const& [type, name] : blocks.items()) {
+                list[type] = name.is_string() ? name.get<std::string>() : type;
+            }
+        }
     } catch (...) {
         playerBlocks_.clear();
     }
@@ -364,7 +385,14 @@ void ServerConfigImpl::savePlayerBlocksConfig() {
     auto& mod  = FastMiner::getInstance().getSelf();
     auto  path = mod.getModDir() / PlayerBlocksFileName;
 
-    auto json = json_utils::struct2json(playerBlocks_);
+    nlohmann::ordered_json json = nlohmann::ordered_json::object();
+    for (auto const& [uuid, list] : playerBlocks_) {
+        nlohmann::ordered_json blockObject = nlohmann::ordered_json::object();
+        for (auto const& [type, name] : list) {
+            blockObject[type] = name;
+        }
+        json[uuid.asString()] = std::move(blockObject);
+    }
     ll::file_utils::writeFile(path, json.dump());
 }
 

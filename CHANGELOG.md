@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.2] - 2026-11-01
+
+- ✨ 方块按钮图标改为对应方块的贴图（不再用垃圾桶图标）
+- 🐛 修复玩家方块名称不显示中文的问题：服务端读取 `resource_packs/vanilla/texts/zh_CN.lang` 取中文名
+- 🐛 修复 `PlayerBlocks.json` 反序列化可能丢失名称的问题（改为手动解析）
+
 ## [0.21.1] - 2026-11-01
 
 - ✨ 玩家自定义方块经济：默认每格 1 点，精准采集工具每格 3 点（`playerBlockEconomy` 可配置，独立于全局经济开关）

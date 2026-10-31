@@ -1,5 +1,6 @@
 #include "gui/Form.h"
 
+#include "FastMiner.h"
 #include "config/ServerConfigImpl.h"
 #include "config/ServerConfigModel.h"
 #include "config/StaticGlobalConfigHost.h"
@@ -13,6 +14,7 @@
 #include "ll/api/form/CustomForm.h"
 #include "ll/api/form/FormBase.h"
 #include "ll/api/form/SimpleForm.h"
+#include "ll/api/io/FileUtils.h"
 
 #include "mc/world/actor/player/Player.h"
 #include "mc/world/item/ItemStack.h"
@@ -21,7 +23,11 @@
 #include <mc/world/actor/Actor.h>
 #include <mc/world/actor/player/Player.h>
 
+#include <filesystem>
+#include <sstream>
 #include <string>
+#include <string_view>
+#include <unordered_map>
 #include <vector>
 
 
@@ -181,6 +187,128 @@ TargetBlockInfo resolveTargetBlock(Player& player) {
     return {};
 }
 
+std::string stripNamespace(std::string const& type) {
+    auto pos = type.find(':');
+    return pos == std::string::npos ? type : type.substr(pos + 1);
+}
+
+bool endsWith(std::string_view text, std::string_view suffix) {
+    return text.size() >= suffix.size() && text.compare(text.size() - suffix.size(), suffix.size(), suffix) == 0;
+}
+
+std::string woodenAlias(std::string const& wood) {
+    return wood == "dark_oak" ? "big_oak" : wood;
+}
+
+bool isLegacyWood(std::string const& wood) {
+    return wood == "oak" || wood == "spruce" || wood == "birch" || wood == "jungle" || wood == "acacia"
+        || wood == "dark_oak";
+}
+
+/**
+ * @brief 读取服务端 vanilla 资源包的中文语言文件，给方块取中文名。
+ * @note 服务端没有客户端语言环境，Block::buildDescriptionName() 可能是空字符串。
+ */
+std::unordered_map<std::string, std::string> const& blockNameMap() {
+    static std::unordered_map<std::string, std::string> const map = [] {
+        std::unordered_map<std::string, std::string> result;
+
+        auto root = FastMiner::getInstance().getSelf().getModDir().parent_path().parent_path();
+        auto path = root / "resource_packs/vanilla/texts/zh_CN.lang";
+        if (!std::filesystem::exists(path)) {
+            path = std::filesystem::current_path() / "resource_packs/vanilla/texts/zh_CN.lang";
+        }
+        auto content = ll::file_utils::readFile(path);
+        if (!content) {
+            return result;
+        }
+
+        std::istringstream stream(*content);
+        std::string        line;
+        while (std::getline(stream, line)) {
+            if (line.rfind("tile.", 0) != 0) {
+                continue;
+            }
+            auto pos = line.find(".name=");
+            if (pos == std::string::npos) {
+                continue;
+            }
+            auto key   = line.substr(5, pos - 5);
+            auto value = line.substr(pos + 6);
+            if (!value.empty() && value.back() == '\r') {
+                value.pop_back();
+            }
+            if (!key.empty() && !value.empty()) {
+                result.emplace(std::move(key), std::move(value));
+            }
+        }
+        return result;
+    }();
+    return map;
+}
+
+std::string localizedBlockName(std::string const& type, std::string const& fallback) {
+    auto const& map = blockNameMap();
+    auto        id  = stripNamespace(type);
+
+    auto findName = [&map](std::string const& key) -> std::string {
+        auto it = map.find(key);
+        return it == map.end() ? std::string{} : it->second;
+    };
+
+    if (auto name = findName(id); !name.empty()) {
+        return name;
+    }
+
+    if (endsWith(id, "_log")) {
+        auto wood = woodenAlias(id.substr(0, id.size() - 4));
+        if (auto name = findName("log." + wood); !name.empty()) {
+            return name;
+        }
+    }
+    if (endsWith(id, "_planks")) {
+        auto wood = woodenAlias(id.substr(0, id.size() - 7));
+        if (auto name = findName("planks." + wood); !name.empty()) {
+            return name;
+        }
+    }
+
+    if (!fallback.empty() && fallback != type) {
+        return fallback;
+    }
+    return type;
+}
+
+/** 方块按钮图标：优先用原版贴图路径，取不到时退回方块 id */
+std::string blockIconPath(std::string const& type) {
+    auto id = stripNamespace(type);
+
+    if (id == "grass_block") {
+        return "textures/blocks/grass_top";
+    }
+    if (id == "lit_redstone_ore") {
+        return "textures/blocks/redstone_ore";
+    }
+    if (id == "lit_deepslate_redstone_ore") {
+        return "textures/blocks/deepslate_redstone_ore";
+    }
+
+    if (endsWith(id, "_log")) {
+        auto wood = id.substr(0, id.size() - 4);
+        if (isLegacyWood(wood)) {
+            return "textures/blocks/log_" + woodenAlias(wood);
+        }
+    }
+    if (endsWith(id, "_planks")) {
+        auto wood = id.substr(0, id.size() - 7);
+        if (isLegacyWood(wood)) {
+            return "textures/blocks/planks_" + woodenAlias(wood);
+        }
+    }
+
+    return "textures/blocks/" + id;
+}
+
 } // namespace
 
 void addPlayerTargetBlock(Player& player) {
@@ -199,13 +327,15 @@ void addPlayerTargetBlock(Player& player) {
         return;
     }
 
+    std::string displayName = localizedBlockName(typeName, target.displayName);
+
     auto& impl = StaticGlobalConfigHost::getInstance().as<ServerConfigImpl>();
     if (impl.hasPlayerBlock(player.getUuid(), typeName)) {
         mc_utils::sendText<mc_utils::LogLevel::Error>(player, "你已经添加过这个方块了");
         return;
     }
 
-    if (!impl.addPlayerBlock(player.getUuid(), typeName, target.displayName)) {
+    if (!impl.addPlayerBlock(player.getUuid(), typeName, displayName)) {
         mc_utils::sendText<mc_utils::LogLevel::Error>(player, "添加失败，请稍后再试");
         return;
     }
@@ -217,7 +347,7 @@ void addPlayerTargetBlock(Player& player) {
     mc_utils::sendText<mc_utils::LogLevel::Success>(
         player,
         "已添加 {}，单次最多额外连锁 {} 格（不含手动挖的第 1 个，时运/精准采集附魔正常生效）",
-        target.displayName,
+        displayName,
         ServerConfigImpl::PlayerBlockChainLimit
     );
 }
@@ -235,7 +365,11 @@ void removePlayerTargetBlock(Player& player) {
         return;
     }
 
-    mc_utils::sendText<mc_utils::LogLevel::Success>(player, "已移除 {}", target.displayName);
+    mc_utils::sendText<mc_utils::LogLevel::Success>(
+        player,
+        "已移除 {}",
+        localizedBlockName(target.typeName, target.displayName)
+    );
 }
 
 void sendPlayerBlocksGUI(Player& player) {
@@ -271,15 +405,23 @@ void sendPlayerBlocksGUI(Player& player) {
     f.appendDivider();
 
     for (auto const& [type, name] : blocks) {
-        const std::string& display = name.empty() ? type : name;
+        std::string display = name.empty() ? localizedBlockName(type, type) : name;
+        if (display == type) {
+            display = localizedBlockName(type, type);
+        }
+
         f.appendButton(
             fmt::format("§0{}", display),
-            "textures/ui/icon_trash",
+            blockIconPath(type),
             "path",
             [type](Player& pl) {
                 auto& cfg = StaticGlobalConfigHost::getInstance().as<ServerConfigImpl>();
                 if (cfg.removePlayerBlock(pl.getUuid(), type)) {
-                    mc_utils::sendText<mc_utils::LogLevel::Success>(pl, "已移除 {}", type);
+                    mc_utils::sendText<mc_utils::LogLevel::Success>(
+                        pl,
+                        "已移除 {}",
+                        localizedBlockName(type, type)
+                    );
                 }
                 sendPlayerBlocksGUI(pl);
             }
