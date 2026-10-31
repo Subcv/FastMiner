@@ -22,6 +22,7 @@ ll::Expected<> ServerConfigImpl::load(const std::filesystem::path& baseDir) {
         save(baseDir);
     }
     loadPlayerConfig();
+    loadPlayerBlocksConfig();
     return {};
 }
 
@@ -29,6 +30,7 @@ ll::Expected<> ServerConfigImpl::save(const std::filesystem::path& baseDir) {
     auto path = baseDir / "Config.json";
     ll::config::saveConfig(model, path);
     savePlayerConfig();
+    savePlayerBlocksConfig();
     return {};
 }
 
@@ -327,6 +329,98 @@ void ServerConfigImpl::savePlayerConfig() {
 
     auto json = json_utils::struct2json(playerBlockState_);
     ll::file_utils::writeFile(path, json.dump());
+}
+
+void ServerConfigImpl::loadPlayerBlocksConfig() {
+    playerBlocks_.clear();
+
+    auto& mod  = FastMiner::getInstance().getSelf();
+    auto  path = mod.getModDir() / PlayerBlocksFileName;
+    if (!std::filesystem::exists(path)) {
+        return;
+    }
+
+    auto content = ll::file_utils::readFile(path);
+    if (!content) {
+        return;
+    }
+
+    try {
+        auto json = nlohmann::json::parse(*content);
+        json_utils::json2struct(playerBlocks_, json);
+    } catch (...) {
+        playerBlocks_.clear();
+    }
+}
+
+void ServerConfigImpl::savePlayerBlocksConfig() {
+    auto& mod  = FastMiner::getInstance().getSelf();
+    auto  path = mod.getModDir() / PlayerBlocksFileName;
+
+    auto json = json_utils::struct2json(playerBlocks_);
+    ll::file_utils::writeFile(path, json.dump());
+}
+
+bool ServerConfigImpl::hasPlayerBlock(const mce::UUID& uuid, const std::string& key) {
+    auto iter = playerBlocks_.find(uuid);
+    if (iter == playerBlocks_.end()) {
+        return false;
+    }
+    return iter->second.find(key) != iter->second.end();
+}
+
+bool ServerConfigImpl::addPlayerBlock(
+    const mce::UUID&    uuid,
+    const std::string&  key,
+    const std::string&  name
+) {
+    auto& list = playerBlocks_[uuid];
+    if (list.find(key) != list.end()) {
+        return false;
+    }
+    list.emplace(key, name.empty() ? key : name);
+    savePlayerBlocksConfig();
+    return true;
+}
+
+bool ServerConfigImpl::removePlayerBlock(const mce::UUID& uuid, const std::string& key) {
+    auto iter = playerBlocks_.find(uuid);
+    if (iter == playerBlocks_.end()) {
+        return false;
+    }
+    if (iter->second.erase(key) == 0) {
+        return false;
+    }
+    if (iter->second.empty()) {
+        playerBlocks_.erase(iter);
+    }
+    savePlayerBlocksConfig();
+    return true;
+}
+
+std::string ServerConfigImpl::getPlayerBlockName(const mce::UUID& uuid, const std::string& key) {
+    auto iter = playerBlocks_.find(uuid);
+    if (iter == playerBlocks_.end()) {
+        return key;
+    }
+    auto blockIter = iter->second.find(key);
+    if (blockIter == iter->second.end()) {
+        return key;
+    }
+    return blockIter->second;
+}
+
+std::vector<std::pair<std::string, std::string>> ServerConfigImpl::listPlayerBlocks(const mce::UUID& uuid) {
+    std::vector<std::pair<std::string, std::string>> result;
+    auto iter = playerBlocks_.find(uuid);
+    if (iter == playerBlocks_.end()) {
+        return result;
+    }
+    result.reserve(iter->second.size());
+    for (auto const& [type, name] : iter->second) {
+        result.emplace_back(type, name);
+    }
+    return result;
 }
 
 

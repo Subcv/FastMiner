@@ -17,6 +17,7 @@
 #include "mc/world/actor/player/Player.h"
 #include "mc/world/item/ItemStack.h"
 #include "mc/world/level/block/Block.h"
+#include "mc/world/phys/HitResult.h"
 #include <mc/world/actor/Actor.h>
 #include <mc/world/actor/player/Player.h>
 
@@ -147,6 +148,135 @@ void _addHandheldItemBlock(Player& player) {
     _sendEditBlockConfig(player, block->getTypeName());
 }
 
+/* ------------------------------------------------------------------ */
+/* 玩家自定义连锁方块（所有玩家可用，单次上限 64，附魔正常结算）        */
+/* ------------------------------------------------------------------ */
+
+namespace {
+
+/** 优先取视线 6 格内的方块，取不到再退回主手方块 */
+struct TargetBlockInfo {
+    std::string typeName;
+    std::string displayName;
+    bool        valid{false};
+};
+
+TargetBlockInfo resolveTargetBlock(Player& player) {
+    auto hit = player.traceRay(6.0f, false, true);
+    if (hit.mType == HitResultType::Tile) {
+        auto& block = player.getDimensionBlockSource().getBlock(hit.mBlock);
+        if (!block.isAir()) {
+            return {block.getTypeName(), block.buildDescriptionName(), true};
+        }
+    }
+
+    auto const& item = player.getSelectedItem();
+    if (!item.isNull() && mc_utils::isBlock(item)) {
+        auto block = item.mBlock;
+        if (block) {
+            return {block->getTypeName(), item.getName(), true};
+        }
+    }
+
+    return {};
+}
+
+} // namespace
+
+void addPlayerTargetBlock(Player& player) {
+    auto target = resolveTargetBlock(player);
+    if (!target.valid) {
+        mc_utils::sendText<mc_utils::LogLevel::Error>(player, "请对准 6 格内的方块，或手持一个方块!");
+        return;
+    }
+
+    auto const& typeName = target.typeName;
+    if (ServerConfigImpl::model.blocks.find(typeName) != ServerConfigImpl::model.blocks.end()) {
+        mc_utils::sendText<mc_utils::LogLevel::Error>(
+            player,
+            "该方块已在 FastMiner 全局方块表中，请直接输入 /fm 在个人设置里开启它"
+        );
+        return;
+    }
+
+    auto& impl = StaticGlobalConfigHost::getInstance().as<ServerConfigImpl>();
+    if (impl.hasPlayerBlock(player.getUuid(), typeName)) {
+        mc_utils::sendText<mc_utils::LogLevel::Error>(player, "你已经添加过这个方块了");
+        return;
+    }
+
+    if (!impl.addPlayerBlock(player.getUuid(), typeName, target.displayName)) {
+        mc_utils::sendText<mc_utils::LogLevel::Error>(player, "添加失败，请稍后再试");
+        return;
+    }
+
+    // 首次添加时自动打开总开关，否则玩家还得额外去 /fm 里打开「启用连锁采集」
+    impl.enable(player.getUuid(), ServerConfigImpl::KEY_ENABLE.data());
+    impl.savePlayerConfig();
+
+    mc_utils::sendText<mc_utils::LogLevel::Success>(
+        player,
+        "已添加 {}，单次最多额外连锁 {} 格（不含手动挖的第 1 个，时运/精准采集附魔正常生效）",
+        target.displayName,
+        ServerConfigImpl::PlayerBlockChainLimit
+    );
+}
+
+void removePlayerTargetBlock(Player& player) {
+    auto target = resolveTargetBlock(player);
+    if (!target.valid) {
+        mc_utils::sendText<mc_utils::LogLevel::Error>(player, "请对准 6 格内的方块，或手持一个方块!");
+        return;
+    }
+
+    auto& impl = StaticGlobalConfigHost::getInstance().as<ServerConfigImpl>();
+    if (!impl.removePlayerBlock(player.getUuid(), target.typeName)) {
+        mc_utils::sendText<mc_utils::LogLevel::Error>(player, "你的连锁列表里没有这个方块");
+        return;
+    }
+
+    mc_utils::sendText<mc_utils::LogLevel::Success>(player, "已移除 {}", target.displayName);
+}
+
+void sendPlayerBlocksGUI(Player& player) {
+    auto& impl   = StaticGlobalConfigHost::getInstance().as<ServerConfigImpl>();
+    auto  blocks = impl.listPlayerBlocks(player.getUuid());
+
+    SimpleForm f{PLUGIN_NAME};
+    f.setContent(fmt::format(
+        "§7我的连锁方块：§e{} §7种\n"
+        "§7单次最多额外连锁 §e{} §7格（不含手动挖的第 1 个）\n"
+        "§7时运/精准采集附魔正常生效\n"
+        "§7对准方块输入 §e/fm add §7添加，§e/fm remove §7移除",
+        blocks.size(),
+        ServerConfigImpl::PlayerBlockChainLimit
+    ));
+
+    f.appendButton("添加看向的方块", "textures/ui/color_plus", "path", [](Player& pl) {
+        addPlayerTargetBlock(pl);
+        sendPlayerBlocksGUI(pl);
+    });
+    f.appendDivider();
+
+    for (auto const& [type, name] : blocks) {
+        f.appendButton(
+            fmt::format("{}\n§c点击移除", name),
+            "textures/ui/icon_trash",
+            "path",
+            [type](Player& pl) {
+                auto& cfg = StaticGlobalConfigHost::getInstance().as<ServerConfigImpl>();
+                if (cfg.removePlayerBlock(pl.getUuid(), type)) {
+                    mc_utils::sendText<mc_utils::LogLevel::Success>(pl, "已移除 {}", type);
+                }
+                sendPlayerBlocksGUI(pl);
+            }
+        );
+    }
+
+    f.appendButton("返回", "textures/ui/icon_import", "path", [](Player& pl) { sendPlayerConfigGUI(pl); });
+    f.sendTo(player);
+}
+
 void _sendBlockViewer(Player& player, std::string const& typeName) {
     auto const& block = ServerConfigImpl::model.blocks[typeName];
 
@@ -217,6 +347,10 @@ void sendPlayerConfigGUI(Player& player) {
         "仅潜行时启用",
         impl.isEnabled(uuid, ServerConfigImpl::KEY_SNEAK.data())
     );
+
+    f.appendDivider();
+    f.appendLabel(">>>  玩家自定义方块（单次上限 64）");
+    f.appendLabel("§7输入 §e/fm blocks §7管理，§e/fm add §7添加看向的方块");
 
     f.appendDivider();
     f.appendLabel(">>>  方块配置");

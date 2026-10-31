@@ -108,6 +108,33 @@ void ServerFastMinerCommand::setup(std::string_view command, std::string_view de
         gui::sendOpBlockManager(pl);
     });
 
+    // fm add —— 所有玩家：把看向（或手持）的方块加入自己的连锁列表（单次上限 64）
+    cmd.overload().text("add").execute([](CommandOrigin const& ori, CommandOutput& out) {
+        if (ori.getOriginType() != CommandOriginType::Player) {
+            return mc_utils::sendText<mc_utils::LogLevel::Error>(out, ERR_ONLY_PLAYER_USE);
+        }
+        Player& pl = *static_cast<Player*>(ori.getEntity());
+        gui::addPlayerTargetBlock(pl);
+    });
+
+    // fm remove —— 所有玩家：把看向（或手持）的方块从自己的连锁列表移除
+    cmd.overload().text("remove").execute([](CommandOrigin const& ori, CommandOutput& out) {
+        if (ori.getOriginType() != CommandOriginType::Player) {
+            return mc_utils::sendText<mc_utils::LogLevel::Error>(out, ERR_ONLY_PLAYER_USE);
+        }
+        Player& pl = *static_cast<Player*>(ori.getEntity());
+        gui::removePlayerTargetBlock(pl);
+    });
+
+    // fm blocks —— 所有玩家：打开自己的连锁方块管理界面
+    cmd.overload().text("blocks").execute([](CommandOrigin const& ori, CommandOutput& out) {
+        if (ori.getOriginType() != CommandOriginType::Player) {
+            return mc_utils::sendText<mc_utils::LogLevel::Error>(out, ERR_ONLY_PLAYER_USE);
+        }
+        Player& pl = *static_cast<Player*>(ori.getEntity());
+        gui::sendPlayerBlocksGUI(pl);
+    });
+
 #ifdef DEBUG
     // fm debug unbreakable
     cmd.overload().text("debug").text("unbreakable").execute([](CommandOrigin const& ori, CommandOutput& out) {

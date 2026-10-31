@@ -11,6 +11,7 @@
 
 #include <memory>
 #include <optional>
+#include <utility>
 
 namespace fm::server {
 
@@ -60,7 +61,34 @@ bool ServerMinerLauncher::isMinerEnabled(Player& player, const std::string& bloc
         FM_TRACE("sneaking required but player is not sneaking");
         return false;
     }
-    return inst.isEnabled(uuid, blockType);
+    return inst.isEnabled(uuid, blockType) || inst.hasPlayerBlock(uuid, blockType);
+}
+
+RuntimeSingleBlockConfigPtr ServerMinerLauncher::loadRuntimeSingleBlockConfig(
+    std::string const& blockType,
+    Player&            player
+) {
+    // 先走全局方块配置（原版 FastMiner 行为）
+    if (auto global = MinerLauncher::loadRuntimeSingleBlockConfig(blockType); global) {
+        return global;
+    }
+
+    // 再看是不是该玩家自己添加的方块
+    auto& inst = StaticGlobalConfigHost::getInstance().as<ServerConfigImpl>();
+    auto& uuid = player.getUuid();
+    if (!inst.hasPlayerBlock(uuid, blockType)) {
+        return nullptr;
+    }
+
+    // 玩家自定义方块：6 面相邻、无工具限制、不限制精准采集、上限固定 64
+    // playerDestroy 由 ChainTask 调用，因此时运/精准采集附魔会正常生效
+    SingleBlockConfig single{};
+    single.name          = inst.getPlayerBlockName(uuid, blockType);
+    single.cost          = 0;
+    single.limit         = ServerConfigImpl::PlayerBlockChainLimit;
+    single.destroyMode   = DestroyMode::Default;
+    single.silkTouchMode = SilkTouchMode::Unlimited;
+    return inst.buildRuntimeSingleBlockConfig(std::move(single));
 }
 
 bool ServerMinerLauncher::canDestroyBlockWithConfig(Player& player, const RuntimeSingleBlockConfigPtr& rtConfig) {

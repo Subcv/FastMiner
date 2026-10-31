@@ -18,5 +18,12 @@ void sendOpBlockManager(Player& player);
 
 void sendPlayerConfigGUI(Player& player);
 
+/* 玩家自定义连锁方块（所有玩家可用，单次上限 64） */
+void addPlayerTargetBlock(Player& player);
+
+void removePlayerTargetBlock(Player& player);
+
+void sendPlayerBlocksGUI(Player& player);
+
 
 } // namespace fm::server::gui

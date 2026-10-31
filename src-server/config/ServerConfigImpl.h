@@ -34,6 +34,9 @@ public:
     void loadPlayerConfig();
     void savePlayerConfig();
 
+    void loadPlayerBlocksConfig();
+    void savePlayerBlocksConfig();
+
     bool isEnabled(const mce::UUID& uuid, const std::string& key) override;
     void setEnabled(const mce::UUID& uuid, const std::string& key, bool enabled) override;
     void enable(const mce::UUID& uuid, const std::string& key) override;
@@ -43,8 +46,15 @@ public:
     void removeBlock(const mce::UUID& uuid, const std::string& key) override;
     void ensurePlayerBlockConfig() override;
 
+    bool hasPlayerBlock(const mce::UUID& uuid, const std::string& key) override;
+    bool addPlayerBlock(const mce::UUID& uuid, const std::string& key, const std::string& name) override;
+    bool removePlayerBlock(const mce::UUID& uuid, const std::string& key) override;
+    std::string getPlayerBlockName(const mce::UUID& uuid, const std::string& key) override;
+    std::vector<std::pair<std::string, std::string>> listPlayerBlocks(const mce::UUID& uuid) override;
+
 private:
     PlayerBlockState playerBlockState_;
+    PlayerBlocks     playerBlocks_;
 };
 
 } // namespace server

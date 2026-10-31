@@ -36,6 +36,14 @@ public:
 
     virtual RuntimeSingleBlockConfigPtr loadRuntimeSingleBlockConfig(std::string const& blockType);
 
+    /**
+     * @brief 带玩家上下文的运行时配置加载。
+     * @note 服务端用它来生成「玩家自己添加的方块」的运行时配置（上限 64），
+     *       客户端/默认实现直接退回全局配置。
+     */
+    virtual RuntimeSingleBlockConfigPtr
+    loadRuntimeSingleBlockConfig(std::string const& blockType, Player& player);
+
     virtual int calculateLimit(ChainTaskContext const& ctx);
 
     /**

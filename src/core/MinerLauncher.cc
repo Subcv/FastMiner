@@ -122,7 +122,7 @@ void MinerLauncher::onPlayerDestroyBlock(
         return;
     }
 
-    auto rtConfig = this->loadRuntimeSingleBlockConfig(blockType);
+    auto rtConfig = this->loadRuntimeSingleBlockConfig(blockType, player);
     if (!rtConfig) [[unlikely]] {
         FM_TRACE("block type not found in rtConfig");
         return;
@@ -159,6 +159,11 @@ bool MinerLauncher::canDestroyBlockWithMcApi(Player& player, Block const& block)
 
 RuntimeSingleBlockConfigPtr MinerLauncher::loadRuntimeSingleBlockConfig(std::string const& blockType) {
     return StaticGlobalConfigHost::getRuntimeSingleBlockConfig(blockType);
+}
+
+RuntimeSingleBlockConfigPtr
+MinerLauncher::loadRuntimeSingleBlockConfig(std::string const& blockType, Player& /*player*/) {
+    return loadRuntimeSingleBlockConfig(blockType);
 }
 
 void MinerLauncher::prepareAndLaunchTask(ChainTaskContext ctx, TaskDispatcher& dispatcher) {

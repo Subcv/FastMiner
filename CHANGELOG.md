@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-10-31
+
+- ✨ (服务端侧) 新增玩家自定义连锁方块：普通玩家可用 `/fm add` 把看向（或手持）的方块加入自己的列表，`/fm remove` 移除，`/fm blocks` 打开管理界面
+- ✨ 玩家自定义方块每人独立（`PlayerBlocks.json`），单次连锁上限固定 64 格
+- ✨ 自定义方块走原生 `playerDestroy`，时运/精准采集/耐久/工具附魔正常生效
+
 ## [0.20.0] - 2026-09-24
 
 - 适配 LeviLamina v26.51.x

@@ -9,6 +9,9 @@ public:
     bool canDestroyBlockWithConfig(Player& player, const RuntimeSingleBlockConfigPtr& rtConfig) override;
     int  calculateLimit(ChainTaskContext const& ctx) override;
 
+    RuntimeSingleBlockConfigPtr
+    loadRuntimeSingleBlockConfig(std::string const& blockType, Player& player) override;
+
 protected:
     void
     launchChainTask(ChainTaskContext ctx, TaskDispatcher& dispatcher, std::optional<PreSearchData> preSearch) override;
